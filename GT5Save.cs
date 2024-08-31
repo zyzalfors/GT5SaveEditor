@@ -1,0 +1,394 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text;
+
+ public class GT5Save {
+
+        private string _path;
+        private List<int> _itemOffsets;
+        private List<int> _list0;
+        private List<int> _list1;
+        private uint _tableLength;
+        private long _keysOffset;
+        private readonly List<string> _itemsKeys;
+        private const decimal _headerMagic = 249;
+        private const long _headerLength = 32;
+        private const string _sqlLiteFileMagic = "SQLite format 3";
+        private const long _firstItemOffset = 42;
+        private const long _startOffsetReadStart = 33;
+        public const string securefileid = "BDBD2EB72D82473DBE09F1B552A93FE6";
+
+        public GT5Save(string path) {
+            _path = path;
+            _itemOffsets = new List<int>();
+            _list0 = new List<int>();
+            _list1 = new List<int>();
+            _itemsKeys = new List<string>();
+            ReadInfos();
+        }
+
+        private ulong ReverseEndianess(uint begin, uint end, byte[] buff)  {
+            uint num = 0;
+            for(uint i = begin; i <= end; i++) num = (int) i != (int) begin ? num << 8 | buff[i] : buff[i];
+            return num;
+        }
+
+        private void ReadInfos() {
+            var fs = new FileStream(_path, FileMode.Open) { Position = 3 };
+            var headerMagic = (byte) fs.ReadByte();
+            fs.Close();
+            if(headerMagic == _headerMagic) ReadItemInfos();
+        }
+
+        public void PrintInfos() {
+            var itemsKey = new List<string>(_itemsKeys);
+            itemsKey.Sort();
+            foreach(var key in itemsKey) {
+                var infos = GetItemInfos(key);
+                var offset = (long) infos[0];
+                var value = (ulong) infos[1];
+                Console.WriteLine(key + " at " + offset.ToString() + ": " + value.ToString());
+            }
+            var sqlLiteOffset = GetSqlLiteOffset();
+            Console.WriteLine("SQLite at " + sqlLiteOffset.ToString());
+        }
+
+        private void ReadItemInfos() {
+            try {
+                var fs = new FileStream(_path, FileMode.Open) { Position = _startOffsetReadStart };
+                var buff = new byte[4];
+                fs.Read(buff, 0, 4);
+                _tableLength = (uint) ReverseEndianess(0, 3, buff);
+                fs.Position = _firstItemOffset;
+                _keysOffset = _tableLength + _headerLength;
+                bool flag = false;
+                var dataTypeExtended = new byte[5];
+                byte value = 0;
+                while(fs.Position < _keysOffset) ReadValues(fs, dataTypeExtended, ref value, ref flag);
+                _list1 = _list0.Distinct().ToList();
+                _list1.Sort();
+                fs.Position += 2;
+                foreach(int i in _list1) _itemsKeys.Add(ReadItemKey(fs));
+                fs.Close();
+            }
+            catch {}
+        }
+
+        private object[] GetItemInfos(string key) {
+            try {
+                long offset = 0;
+                ulong val = 0;                
+                var fs = new FileStream(_path, FileMode.Open) { Position = GetItemOffset(key) };
+                if((byte) fs.ReadByte() == 7) {
+                    var buff = new byte[8];
+                    var temp = (byte) fs.ReadByte();
+                    if(temp <= sbyte.MaxValue) fs.Position++;
+                    else if(temp <= 129) fs.Position += 2;
+                    offset = fs.Position;
+                    int length = 0;
+                    while((byte) fs.ReadByte() != 7) length++;
+                    fs.Position = offset;
+                    switch(length) {
+                        case 1:
+                            fs.Read(buff, 7, 1);
+                            val = ReverseEndianess(7, 7, buff);
+                            break;
+                        case 2:
+                            fs.Read(buff, 6, 2);
+                            val = ReverseEndianess(6, 7, buff);
+                            break;
+                        case 4:
+                            fs.Read(buff, 4, 4);
+                            val = ReverseEndianess(4, 7, buff);
+                            break;
+                        case 8:
+                            fs.Read(buff, 0, 8);
+                            val = ReverseEndianess(0, 7, buff);
+                            break;
+                    }
+                }
+                fs.Close();
+                return new object[2] {offset, val};
+            }
+            catch {
+                return new object[2] {-1, 0};
+            }
+        }
+
+        public void UpdateItem(string key, string val) {
+            try {
+                ulong value = ulong.Parse(val);
+                var buff = new byte[8];
+                var fs = new FileStream(_path, FileMode.Open) { Position = GetItemOffset(key) };
+                if((byte) fs.ReadByte() == 7) {
+                    var temp = (byte) fs.ReadByte();
+                    if(temp <= sbyte.MaxValue) fs.Position++;
+                    else if(temp <= 129) fs.Position += 2;
+                    long offset = fs.Position;
+                    int length = 0;
+                    while((byte) fs.ReadByte() != 7) length++;
+                    fs.Position = offset;
+                    switch(length) {
+                        case 1:
+                            ConvertToSaveValue(buff, 7, 1, value);
+                            fs.Write(buff, 7, 1);
+                            break;
+                        case 2:
+                            ConvertToSaveValue(buff, 6, 2, value);
+                            fs.Write(buff, 6, 2);
+                            break;
+                        case 4:
+                            ConvertToSaveValue(buff, 4, 4, value);
+                            fs.Write(buff, 4, 4);
+                            break;
+                        case 8:
+                            ConvertToSaveValue(buff, 0, 8, value);
+                            fs.Write(buff, 0, 8);
+                            break;
+                    }
+                }
+                fs.Close();
+            }
+            catch {}
+        }
+
+        private static void ConvertToSaveValue(byte[] buff, uint start, uint length, ulong value) {
+            switch(length) {
+                case 1:
+                    buff[start] = (byte) (value & byte.MaxValue);
+                    break;
+                case 2:
+                    buff[start] = (byte) (value >> 8 & byte.MaxValue);
+                    buff[start + 1] = (byte) (value & byte.MaxValue);
+                    break;
+                case 4:
+                    buff[start] = (byte) (value >> 24 & byte.MaxValue);
+                    buff[start + 1] = (byte) (value >> 16 & byte.MaxValue);
+                    buff[start + 2] = (byte) (value >> 8 & byte.MaxValue);
+                    buff[start + 3] = (byte) (value & byte.MaxValue);
+                    break;
+                case 8:
+                    buff[start] = (byte) (value >> 56 & byte.MaxValue);
+                    buff[start + 1] = (byte) (value >> 48 & byte.MaxValue);
+                    buff[start + 2] = (byte) (value >> 40 & byte.MaxValue);
+                    buff[start + 3] = (byte) (value >> 32 & byte.MaxValue);
+                    buff[start + 4] = (byte) (value >> 24 & byte.MaxValue);
+                    buff[start + 5] = (byte) (value >> 16 & byte.MaxValue);
+                    buff[start + 6] = (byte) (value >> 8 & byte.MaxValue);
+                    buff[start + 7] = (byte) (value & byte.MaxValue);
+                    break;
+            }
+        }
+
+        private int GetItemOffset(string key) {
+            try {
+                int indexOfItemName = _itemsKeys.IndexOf(key);
+                int index = _list0.IndexOf(_list1[indexOfItemName]);
+                return _itemOffsets[index];
+            }
+            catch {
+                return 0;
+            }
+        }
+
+        private ulong GetSqlLiteOffset() {
+            var fs = new FileStream(_path, FileMode.Open);
+            bool flag = false;
+            ulong off = 0;
+            var magicBytes = Encoding.ASCII.GetBytes(_sqlLiteFileMagic);
+            var buff = new byte[_sqlLiteFileMagic.Length];
+            while(!flag && fs.Position < fs.Length) {
+                if((char) fs.ReadByte() == magicBytes[0]) {
+                    fs.Position--;
+                    fs.Read(buff, 0, _sqlLiteFileMagic.Length);
+                    if(AreByteArraysEquivalent(magicBytes, buff)) {
+                        flag = true;
+                        off = (ulong) fs.Position - (ulong) _sqlLiteFileMagic.Length;
+                    }
+                }
+            }
+            fs.Dispose();
+            return off;
+        }
+
+        private string ReadItemKey(FileStream fs) {
+            try {
+                var key = new StringBuilder(string.Empty);               
+                var keySize = fs.ReadByte();
+                for(int i = 0; i < keySize; i++) key.Append((char) fs.ReadByte());
+                return key.ToString();
+            }
+            catch {
+                return string.Empty;
+            }
+        }
+
+        private void ReadValues(FileStream fs, byte[] dataTypeExtended, ref byte value, ref bool flag) {
+            try {
+                var dataType = (byte) fs.ReadByte();
+                dataTypeExtended[0] = dataType;
+                if(dataType != 7) return;
+                dataType = (byte) fs.ReadByte();
+                dataTypeExtended[1] = dataType;
+                if(dataType <= sbyte.MaxValue) ReadValue(fs, dataTypeExtended, ref value, ref flag);
+                else {
+                    if(dataType > 129) return;
+                    dataType = (byte) fs.ReadByte();
+                    dataTypeExtended[2] = dataType;
+                    ReadValue(fs, dataTypeExtended, ref value, ref flag);
+                }
+            }
+            catch {}
+        }
+
+        private void ReadValue(FileStream fs, byte[] dataTypeExtended, ref byte value, ref bool flag) {
+            try {
+                var buff = new byte[4];
+                int temp = 0;
+                byte dataType = 0;
+                value = (byte) fs.ReadByte();
+                int itemOffset = dataTypeExtended[1] > sbyte.MaxValue ? (int) fs.Position - 4 : (int) fs.Position - 3;
+                switch(value) {
+                    case 0:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        break;
+                    case 1:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position++;
+                        break;
+                    case 2:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 2;
+                        break;
+                    case 3:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 4;
+                        break;
+                    case 4:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 8;
+                        break;
+                    case 5:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 4;
+                        break;
+                    case 6:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Read(buff, 0, 4);
+                        temp = (int) ReverseEndianess(0, 3, buff);
+                        fs.Position += temp;
+                        break;
+                    case 7:
+                        flag = false;
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position--;
+                        break;
+                    case 8:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Read(buff, 0, 4);
+                        temp = (int) ReverseEndianess(0, 3, buff);
+                        dataType = (byte) fs.ReadByte();
+                        fs.Position--;
+                        if(dataType == 7) {
+                            flag = false;
+                            for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
+                        }
+                        else {
+                            flag = true;
+                            for(int i = 0; i < temp; i++) ReadValue(fs, dataTypeExtended, ref value, ref flag);
+                            flag = false;
+                        }
+                        break;
+                    case 9:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Read(buff, 0, 4);
+                        temp = (int) ReverseEndianess(0, 3, buff);
+                        dataType = (byte) fs.ReadByte();
+                        fs.Position--;
+                        if(dataType == 7) {
+                            flag = false;
+                            for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
+                        }
+                        else {
+                            flag = true;
+                            for(int i = 0; i < temp * 2; i++) ReadValue(fs, dataTypeExtended, ref value, ref flag);
+                            flag = false;
+                        }
+                        break;
+                    case 10:
+                        dataType = (byte) fs.ReadByte();
+                        if(dataType == 9) {
+                            ReadItemOffset(dataTypeExtended, value, flag, itemOffset);                            
+                            fs.Read(buff, 0, 4);
+                            temp = (int) ReverseEndianess(0, 3, buff);
+                            for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
+                            break;
+                        }
+                        else {
+                            if(dataType != 6) break;
+                            ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                            fs.Position += 8;
+                            fs.Read(buff, 0, 4);
+                            temp = (int) ReverseEndianess(0, 3, buff);
+                            fs.Position += temp * 16;
+                            break;
+                        }
+                    case 12:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 1;
+                        break;
+                    case 13:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 2;
+                        break;
+                    case 14:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 4;
+                        break;
+                    case 15:
+                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                        fs.Position += 8;
+                        break;
+                }
+            }
+            catch {}
+        }
+
+        private void ReadItemOffset(byte[] dataTypeExtended, byte value, bool flag, int itemOffset) {
+            try {
+                if(flag || value >= 16) return;
+                if(value == 7) {
+                    if(dataTypeExtended[1] == 128 || dataTypeExtended[1] == 129) {
+                        _list0.Add((int) ReverseEndianess(0, 2, dataTypeExtended));
+                        _itemOffsets.Add(itemOffset);
+                    }
+                    else {
+                        _itemOffsets.Add(itemOffset);
+                        _list0.Add((int) ReverseEndianess(0, 1, dataTypeExtended));
+                    }
+                }
+                else if(dataTypeExtended[1] <= sbyte.MaxValue) {
+                    _itemOffsets.Add(itemOffset);
+                    _list0.Add((int) ReverseEndianess(0, 1, dataTypeExtended));
+                }
+                else if(dataTypeExtended[1] <= 129) {
+                    _itemOffsets.Add(itemOffset);
+                    _list0.Add((int) ReverseEndianess(0, 2, dataTypeExtended));
+                }
+            }
+            catch {}
+        }
+
+        private bool AreByteArraysEquivalent(byte[] array1, byte[] array2) {
+            if(array1 == null || array2 == null) throw new ArgumentNullException();
+            if(array1 == array2) return true;
+            if(array1.Length != array2.Length) return false;
+            for(int i = 0; i < array1.Length; i++) {
+                if(array1[i] != array2[i]) return false;
+            }
+            return true;
+        }
+
+}
