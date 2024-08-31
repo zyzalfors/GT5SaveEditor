@@ -9,7 +9,7 @@ using System.Text;
         public ulong version;
     }
 
-    public struct PFDSignature {
+    public class PFDSignature {
         public byte[] bottom_hash;
         public byte[] top_hash;
         public byte[] hash_key;
