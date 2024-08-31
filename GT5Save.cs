@@ -154,7 +154,7 @@ using System.Text;
             catch {}
         }
 
-        private static void ConvertToSaveValue(byte[] buff, uint start, uint length, ulong value) {
+        private void ConvertToSaveValue(byte[] buff, uint start, uint length, ulong value) {
             switch(length) {
                 case 1:
                     buff[start] = (byte) (value & byte.MaxValue);
