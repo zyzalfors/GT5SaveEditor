@@ -34,9 +34,9 @@ using System.Text;
             get {
                 var ms = new MemoryStream();
                 using(var bw = new BinaryWriter(ms)) {
-                    bw.Write(PS3Crypto.SwapByteOrder(capacity));
-                    bw.Write(PS3Crypto.SwapByteOrder(num_reserved));
-                    bw.Write(PS3Crypto.SwapByteOrder(num_used));
+                    bw.Write(PS3Crypto.SwapByteOrder(this.capacity));
+                    bw.Write(PS3Crypto.SwapByteOrder(this.num_reserved));
+                    bw.Write(PS3Crypto.SwapByteOrder(this.num_used));
                     foreach(var value in this.entries) bw.Write(PS3Crypto.SwapByteOrder(value));
                 }
                 return ms.ToArray();
