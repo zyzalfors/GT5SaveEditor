@@ -110,7 +110,7 @@ using System.Text;
 
         public ParamPFD(string root, string securefileid) {
             this.root = root;
-            this.hash_secure_file_id = this.GenerateHashKeyForSecureFileID(PS3Crypto.StringToByteArray(securefileid));
+            this.hash_secure_file_id = GenerateHashKeyForSecureFileID(PS3Crypto.StringToByteArray(securefileid));
             var path = Path.Combine(root, "PARAM.PFD");
             using(var br = new BinaryReader(new FileStream(path, FileMode.Open, FileAccess.Read))) {
                 this.pfd_header = new PFDHeader {
