@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text;
 
     public class PFDHeader {
@@ -276,7 +275,7 @@ using System.Text;
                 bw.Write(PS3Crypto.SwapByteOrder(this.pfd_header.magic));
                 bw.Write(PS3Crypto.SwapByteOrder(this.pfd_header.version));
                 bw.Write(this.pfd_header_iv, 0, this.pfd_header_iv.Length);
-                var buffer = PS3Crypto.EncryptWithPortability(pfd_header_iv, this.pfd_signature.Buffer);
+                var buffer = PS3Crypto.EncryptWithPortability(this.pfd_header_iv, this.pfd_signature.Buffer);
                 bw.Write(buffer, 0, buffer.Length);
                 buffer = this.pfd_hash_table.Buffer;
                 bw.Write(buffer, 0, buffer.Length);
