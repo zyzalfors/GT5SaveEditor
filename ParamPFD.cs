@@ -2,8 +2,9 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Security.Cryptography;
 
-    public class PFDHeader {
+public class PFDHeader {
         public ulong magic;
         public ulong version;
     }

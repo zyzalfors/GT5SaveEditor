@@ -36,9 +36,8 @@ using System.Text;
         }
 
         private void ReadInfos() {
-            var fs = new FileStream(_path, FileMode.Open) { Position = 3 };
-            var headerMagic = (byte) fs.ReadByte();
-            fs.Close();
+            var headerMagic = 0;
+            using(var fs = new FileStream(_path, FileMode.Open) { Position = 3 }) { headerMagic = (byte) fs.ReadByte(); }
             if(headerMagic == _headerMagic) ReadItemInfos();
         }
 
@@ -56,8 +55,7 @@ using System.Text;
         }
 
         private void ReadItemInfos() {
-            try {
-                var fs = new FileStream(_path, FileMode.Open) { Position = _startOffsetReadStart };
+            using(var fs = new FileStream(_path, FileMode.Open) { Position = _startOffsetReadStart }) {
                 var buff = new byte[4];
                 fs.Read(buff, 0, 4);
                 _tableLength = (uint) ReverseEndianess(0, 3, buff);
@@ -71,16 +69,13 @@ using System.Text;
                 _list1.Sort();
                 fs.Position += 2;
                 foreach(int i in _list1) _itemsKeys.Add(ReadItemKey(fs));
-                fs.Close();
             }
-            catch {}
         }
 
         private object[] GetItemInfos(string key) {
-            try {
-                long offset = 0;
-                ulong val = 0;                
-                var fs = new FileStream(_path, FileMode.Open) { Position = GetItemOffset(key) };
+            long offset = 0;
+            ulong val = 0;
+            using(var fs = new FileStream(_path, FileMode.Open) { Position = GetItemOffset(key) }) {
                 if((byte) fs.ReadByte() == 7) {
                     var buff = new byte[8];
                     var temp = (byte) fs.ReadByte();
@@ -109,19 +104,14 @@ using System.Text;
                             break;
                     }
                 }
-                fs.Close();
-                return new object[2] {offset, val};
             }
-            catch {
-                return new object[2] {-1, 0};
-            }
+            return new object[2] {offset, val};
         }
 
         public void UpdateItem(string key, string val) {
-            try {
+            using(var fs = new FileStream(_path, FileMode.Open) { Position = GetItemOffset(key) }) {
                 ulong value = ulong.Parse(val);
                 var buff = new byte[8];
-                var fs = new FileStream(_path, FileMode.Open) { Position = GetItemOffset(key) };
                 if((byte) fs.ReadByte() == 7) {
                     var temp = (byte) fs.ReadByte();
                     if(temp <= sbyte.MaxValue) fs.Position++;
@@ -149,9 +139,7 @@ using System.Text;
                             break;
                     }
                 }
-                fs.Close();
             }
-            catch {}
         }
 
         private void ConvertToSaveValue(byte[] buff, uint start, uint length, ulong value) {
@@ -194,28 +182,28 @@ using System.Text;
         }
 
         private ulong GetSqlLiteOffset() {
-            var fs = new FileStream(_path, FileMode.Open);
-            bool flag = false;
             ulong off = 0;
-            var magicBytes = Encoding.ASCII.GetBytes(_sqlLiteFileMagic);
-            var buff = new byte[_sqlLiteFileMagic.Length];
-            while(!flag && fs.Position < fs.Length) {
-                if((char) fs.ReadByte() == magicBytes[0]) {
-                    fs.Position--;
-                    fs.Read(buff, 0, _sqlLiteFileMagic.Length);
-                    if(AreByteArraysEquivalent(magicBytes, buff)) {
-                        flag = true;
-                        off = (ulong) fs.Position - (ulong) _sqlLiteFileMagic.Length;
+            using(var fs = new FileStream(_path, FileMode.Open)) {
+                bool flag = false;
+                var magicBytes = Encoding.ASCII.GetBytes(_sqlLiteFileMagic);
+                var buff = new byte[_sqlLiteFileMagic.Length];
+                while(!flag && fs.Position < fs.Length) {
+                    if((char) fs.ReadByte() == magicBytes[0]) {
+                        fs.Position--;
+                        fs.Read(buff, 0, _sqlLiteFileMagic.Length);
+                        if(AreByteArraysEquivalent(magicBytes, buff)) {
+                            flag = true;
+                            off = (ulong) fs.Position - (ulong) _sqlLiteFileMagic.Length;
+                        }
                     }
                 }
             }
-            fs.Dispose();
             return off;
         }
 
         private string ReadItemKey(FileStream fs) {
             try {
-                var key = new StringBuilder(string.Empty);               
+                var key = new StringBuilder(string.Empty);
                 var keySize = fs.ReadByte();
                 for(int i = 0; i < keySize; i++) key.Append((char) fs.ReadByte());
                 return key.ToString();
@@ -226,159 +214,150 @@ using System.Text;
         }
 
         private void ReadValues(FileStream fs, byte[] dataTypeExtended, ref byte value, ref bool flag) {
-            try {
-                var dataType = (byte) fs.ReadByte();
-                dataTypeExtended[0] = dataType;
-                if(dataType != 7) return;
+            var dataType = (byte) fs.ReadByte();
+            dataTypeExtended[0] = dataType;
+            if(dataType != 7) return;
+            dataType = (byte) fs.ReadByte();
+            dataTypeExtended[1] = dataType;
+            if(dataType <= sbyte.MaxValue) ReadValue(fs, dataTypeExtended, ref value, ref flag);
+            else {
+                if(dataType > 129) return;
                 dataType = (byte) fs.ReadByte();
-                dataTypeExtended[1] = dataType;
-                if(dataType <= sbyte.MaxValue) ReadValue(fs, dataTypeExtended, ref value, ref flag);
-                else {
-                    if(dataType > 129) return;
-                    dataType = (byte) fs.ReadByte();
-                    dataTypeExtended[2] = dataType;
-                    ReadValue(fs, dataTypeExtended, ref value, ref flag);
-                }
+                dataTypeExtended[2] = dataType;
+                ReadValue(fs, dataTypeExtended, ref value, ref flag);
             }
-            catch {}
         }
 
         private void ReadValue(FileStream fs, byte[] dataTypeExtended, ref byte value, ref bool flag) {
-            try {
-                var buff = new byte[4];
-                int temp = 0;
-                byte dataType = 0;
-                value = (byte) fs.ReadByte();
-                int itemOffset = dataTypeExtended[1] > sbyte.MaxValue ? (int) fs.Position - 4 : (int) fs.Position - 3;
-                switch(value) {
-                    case 0:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        break;
-                    case 1:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position++;
-                        break;
-                    case 2:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 2;
-                        break;
-                    case 3:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 4;
-                        break;
-                    case 4:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 8;
-                        break;
-                    case 5:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 4;
-                        break;
-                    case 6:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Read(buff, 0, 4);
-                        temp = (int) ReverseEndianess(0, 3, buff);
-                        fs.Position += temp;
-                        break;
-                    case 7:
+            var buff = new byte[4];
+            int temp = 0;
+            byte dataType = 0;
+            value = (byte) fs.ReadByte();
+            int itemOffset = dataTypeExtended[1] > sbyte.MaxValue ? (int) fs.Position - 4 : (int) fs.Position - 3;
+            switch(value) {
+                case 0:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    break;
+                case 1:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position++;
+                    break;
+                case 2:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 2;
+                    break;
+                case 3:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 4;
+                    break;
+                case 4:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 8;
+                    break;
+                case 5:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 4;
+                    break;
+                case 6:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Read(buff, 0, 4);
+                    temp = (int) ReverseEndianess(0, 3, buff);
+                    fs.Position += temp;
+                    break;
+                case 7:
+                    flag = false;
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position--;
+                    break;
+                case 8:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Read(buff, 0, 4);
+                    temp = (int) ReverseEndianess(0, 3, buff);
+                    dataType = (byte) fs.ReadByte();
+                    fs.Position--;
+                    if(dataType == 7) {
                         flag = false;
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position--;
-                        break;
-                    case 8:
+                        for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
+                    }
+                    else {
+                        flag = true;
+                        for(int i = 0; i < temp; i++) ReadValue(fs, dataTypeExtended, ref value, ref flag);
+                        flag = false;
+                    }
+                    break;
+                case 9:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Read(buff, 0, 4);
+                    temp = (int) ReverseEndianess(0, 3, buff);
+                    dataType = (byte) fs.ReadByte();
+                    fs.Position--;
+                    if(dataType == 7) {
+                        flag = false;
+                        for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
+                    }
+                    else {
+                        flag = true;
+                        for(int i = 0; i < temp * 2; i++) ReadValue(fs, dataTypeExtended, ref value, ref flag);
+                        flag = false;
+                    }
+                    break;
+                case 10:
+                    dataType = (byte) fs.ReadByte();
+                    if(dataType == 9) {
                         ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
                         fs.Read(buff, 0, 4);
                         temp = (int) ReverseEndianess(0, 3, buff);
-                        dataType = (byte) fs.ReadByte();
-                        fs.Position--;
-                        if(dataType == 7) {
-                            flag = false;
-                            for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
-                        }
-                        else {
-                            flag = true;
-                            for(int i = 0; i < temp; i++) ReadValue(fs, dataTypeExtended, ref value, ref flag);
-                            flag = false;
-                        }
+                        for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
                         break;
-                    case 9:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Read(buff, 0, 4);
-                        temp = (int) ReverseEndianess(0, 3, buff);
-                        dataType = (byte) fs.ReadByte();
-                        fs.Position--;
-                        if(dataType == 7) {
-                            flag = false;
-                            for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
-                        }
-                        else {
-                            flag = true;
-                            for(int i = 0; i < temp * 2; i++) ReadValue(fs, dataTypeExtended, ref value, ref flag);
-                            flag = false;
-                        }
-                        break;
-                    case 10:
-                        dataType = (byte) fs.ReadByte();
-                        if(dataType == 9) {
-                            ReadItemOffset(dataTypeExtended, value, flag, itemOffset);                            
-                            fs.Read(buff, 0, 4);
-                            temp = (int) ReverseEndianess(0, 3, buff);
-                            for(int i = 0; i < temp; i++) ReadValues(fs, dataTypeExtended, ref value, ref flag);
-                            break;
-                        }
-                        else {
-                            if(dataType != 6) break;
-                            ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                            fs.Position += 8;
-                            fs.Read(buff, 0, 4);
-                            temp = (int) ReverseEndianess(0, 3, buff);
-                            fs.Position += temp * 16;
-                            break;
-                        }
-                    case 12:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 1;
-                        break;
-                    case 13:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 2;
-                        break;
-                    case 14:
-                        ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
-                        fs.Position += 4;
-                        break;
-                    case 15:
+                    }
+                    else {
+                        if(dataType != 6) break;
                         ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
                         fs.Position += 8;
+                        fs.Read(buff, 0, 4);
+                        temp = (int) ReverseEndianess(0, 3, buff);
+                        fs.Position += temp * 16;
                         break;
-                }
+                    }
+                case 12:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 1;
+                    break;
+                case 13:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 2;
+                    break;
+                case 14:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 4;
+                    break;
+                case 15:
+                    ReadItemOffset(dataTypeExtended, value, flag, itemOffset);
+                    fs.Position += 8;
+                    break;
             }
-            catch {}
         }
 
         private void ReadItemOffset(byte[] dataTypeExtended, byte value, bool flag, int itemOffset) {
-            try {
-                if(flag || value >= 16) return;
-                if(value == 7) {
-                    if(dataTypeExtended[1] == 128 || dataTypeExtended[1] == 129) {
-                        _list0.Add((int) ReverseEndianess(0, 2, dataTypeExtended));
-                        _itemOffsets.Add(itemOffset);
-                    }
-                    else {
-                        _itemOffsets.Add(itemOffset);
-                        _list0.Add((int) ReverseEndianess(0, 1, dataTypeExtended));
-                    }
+            if(flag || value >= 16) return;
+            if(value == 7) {
+                if(dataTypeExtended[1] == 128 || dataTypeExtended[1] == 129) {
+                    _list0.Add((int) ReverseEndianess(0, 2, dataTypeExtended));
+                    _itemOffsets.Add(itemOffset);
                 }
-                else if(dataTypeExtended[1] <= sbyte.MaxValue) {
+                else {
                     _itemOffsets.Add(itemOffset);
                     _list0.Add((int) ReverseEndianess(0, 1, dataTypeExtended));
                 }
-                else if(dataTypeExtended[1] <= 129) {
-                    _itemOffsets.Add(itemOffset);
-                    _list0.Add((int) ReverseEndianess(0, 2, dataTypeExtended));
-                }
             }
-            catch {}
+            else if(dataTypeExtended[1] <= sbyte.MaxValue) {
+                _itemOffsets.Add(itemOffset);
+                _list0.Add((int) ReverseEndianess(0, 1, dataTypeExtended));
+            }
+            else if(dataTypeExtended[1] <= 129) {
+                _itemOffsets.Add(itemOffset);
+                _list0.Add((int) ReverseEndianess(0, 2, dataTypeExtended));
+            }
         }
 
         private bool AreByteArraysEquivalent(byte[] array1, byte[] array2) {
