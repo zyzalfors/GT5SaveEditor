@@ -29,26 +29,26 @@ public class GT5SaveEditor {
         };
 
         foreach(var arg in args) {
-            if(string.Equals(arg, "\\enc", StringComparison.OrdinalIgnoreCase)) {
+            if(string.Equals(arg, "enc", StringComparison.OrdinalIgnoreCase)) {
                 argv.encrypt = true;
                 state = State.start;
             }
-            else if(string.Equals(arg, "\\dec", StringComparison.OrdinalIgnoreCase)) {
+            else if(string.Equals(arg, "dec", StringComparison.OrdinalIgnoreCase)) {
                 argv.decrypt = true;
                 state = State.start;
             }
-            else if(string.Equals(arg, "\\read", StringComparison.OrdinalIgnoreCase)) {
+            else if(string.Equals(arg, "read", StringComparison.OrdinalIgnoreCase)) {
                 argv.read = true;
                 state = State.start;
             }
-            else if(string.Equals(arg, "-root", StringComparison.OrdinalIgnoreCase)) {
+            else if(string.Equals(arg, "root", StringComparison.OrdinalIgnoreCase)) {
                 state = State.path;
             }
             else if(state == State.path && argv.root == null) {
                 argv.root = arg;
                 state = State.start;
             }
-            else if(Regex.IsMatch(arg, "-[a-z]+", RegexOptions.IgnoreCase)) {
+            else if(Regex.IsMatch(arg, "[a-z]+", RegexOptions.IgnoreCase)) {
                 argv.props.Add(arg);
                 state = State.prop;
             }
