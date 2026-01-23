@@ -1,11 +1,12 @@
-﻿using System;
+﻿using Microsoft.Data.Sqlite;
+using SQLitePCL;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 
 public class GT5Save {
-
     private readonly string _path;
     private readonly List<int> _itemOffsets;
     private readonly List<int> _list0;
@@ -13,29 +14,47 @@ public class GT5Save {
     private uint _tableLength;
     private long _keysOffset;
     private readonly List<string> _itemsKeys;
-    private const decimal _headerMagic = 249;
+    private const int _headerMagic = 249;
     private const long _headerLength = 32;
-    private const string _sqlLiteFileMagic = "SQLite format 3";
+    private const string _sqLiteFileMagic = "SQLite format 3";
     private const long _firstItemOffset = 42;
     private const long _startOffsetReadStart = 33;
+    private ulong _dbOffset;
+    private string _dbPath;
     public const string securefileid = "BDBD2EB72D82473DBE09F1B552A93FE6";
+    public enum Commands {GoldLicenses, GoldAspec, GoldBspec, GoldSpecial, AllGifts, MaxMoney}
 
     public GT5Save(string path) {
         _path = path;
         _itemOffsets = new List<int>();
         _list0 = new List<int>();
-        _list1 = new List<int>();
         _itemsKeys = new List<string>();
         ReadInfos();
+        InitDb();
     }
 
     private static ulong ReverseEndianess(uint begin, uint end, byte[] buff) {
         uint num = 0;
 
-        for(uint i = begin; i <= end; i++) 
+        for(uint i = begin; i <= end; i++)
             num = i != begin ? num << 8 | buff[i] : buff[i];
 
         return num;
+    }
+
+    private void InitDb() {
+        byte[] dbBuffer;
+
+        using(var fs = new FileStream(_path, FileMode.Open) {Position = (long) _dbOffset}) {
+            using(var ms = new MemoryStream()) {
+                fs.CopyTo(ms);
+                dbBuffer = ms.ToArray();
+            }
+        }
+
+        _dbPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "temp.db");
+        File.WriteAllBytes(_dbPath, dbBuffer);
+        Batteries.Init();
     }
 
     private void ReadInfos() {
@@ -45,8 +64,10 @@ public class GT5Save {
             headerMagic = (byte) fs.ReadByte();
         }
 
-        if(headerMagic == _headerMagic)
+        if(headerMagic == _headerMagic) {
             ReadItemInfos();
+            _dbOffset = GetSqlLiteOffset();
+        }
     }
 
     public void PrintInfos() {
@@ -60,8 +81,7 @@ public class GT5Save {
             Console.WriteLine(key + " at " + offset.ToString() + ": " + value.ToString());
         }
 
-        var sqlLiteOffset = GetSqlLiteOffset();
-        Console.WriteLine("SQLite at " + sqlLiteOffset.ToString());
+        Console.WriteLine("SQLite at " + _dbOffset.ToString());
     }
 
     private void ReadItemInfos() {
@@ -229,19 +249,20 @@ public class GT5Save {
 
     private ulong GetSqlLiteOffset() {
         ulong off = 0;
+
         using(var fs = new FileStream(_path, FileMode.Open)) {
             bool flag = false;
-            var magicBytes = Encoding.ASCII.GetBytes(_sqlLiteFileMagic);
-            var buff = new byte[_sqlLiteFileMagic.Length];
+            var magicBytes = Encoding.ASCII.GetBytes(_sqLiteFileMagic);
+            var buff = new byte[_sqLiteFileMagic.Length];
 
             while(!flag && fs.Position < fs.Length) {
                 if(((char) fs.ReadByte()) == magicBytes[0]) {
                     fs.Position--;
-                    fs.Read(buff, 0, _sqlLiteFileMagic.Length);
+                    fs.Read(buff, 0, _sqLiteFileMagic.Length);
 
                     if(AreByteArraysEquivalent(magicBytes, buff)) {
                         flag = true;
-                        off = ((ulong) fs.Position) - ((ulong) _sqlLiteFileMagic.Length);
+                        off = ((ulong) fs.Position) - ((ulong) _sqLiteFileMagic.Length);
                     }
                 }
             }
@@ -468,5 +489,55 @@ public class GT5Save {
         }
 
         return true;
+    }
+
+    private void UpdateDb(string query) {
+        using(var connection = new SqliteConnection($"Data Source={_dbPath};Pooling=False")) {
+            connection.Open();
+
+            using(var command = connection.CreateCommand()) {
+                command.CommandText = query;
+                command.ExecuteNonQuery();
+            }
+        }
+    }
+
+    public void Process(Commands cmd) {
+        var updateDb = true;
+
+        switch(cmd) {
+            case Commands.GoldLicenses:
+                UpdateDb("UPDATE t_license SET result = 0");
+                break;
+
+            case Commands.GoldAspec:
+                UpdateDb("UPDATE t_aspec_race SET result = 0");
+                break;
+
+            case Commands.GoldBspec:
+                UpdateDb("UPDATE t_bspec_race SET result = 0");
+                break;
+
+            case Commands.GoldSpecial:
+                UpdateDb("UPDATE t_special_event SET result = 0");
+                break;
+
+            case Commands.AllGifts:
+                UpdateDb("UPDATE t_event_present SET get_flag = 0");
+                break;
+
+            case Commands.MaxMoney:
+                UpdateItem("cash", "20000000");
+                updateDb = false;
+                break;
+        }
+
+        if(!updateDb)
+            return;
+
+        var dbBuffer = File.ReadAllBytes(_dbPath);
+        using(var fs = new FileStream(_path, FileMode.Open) {Position = (long) _dbOffset}) {
+            fs.Write(dbBuffer, 0, dbBuffer.Length);
+        }
     }
 }

@@ -260,9 +260,9 @@ namespace PS3SaveDecrypt {
         }
 
         private void DecryptFile(string filepath, PFDEntry entry) {
-            byte[] data = File.ReadAllBytes(filepath);
+            var data = File.ReadAllBytes(filepath);
             var key = GetEntryKey(entry);
-            byte[] decData = PS3Crypto.Decrypt(key, data);
+            var decData = PS3Crypto.Decrypt(key, data);
             File.WriteAllBytes(filepath, decData);
         }
 
@@ -278,9 +278,9 @@ namespace PS3SaveDecrypt {
         }
 
         private void EncryptFile(string filepath, PFDEntry entry) {
-            byte[] data = File.ReadAllBytes(filepath);
+            var data = File.ReadAllBytes(filepath);
             var key = GetEntryKey(entry);
-            byte[] encData = PS3Crypto.Encrypt(key, data);
+            var encData = PS3Crypto.Encrypt(key, data);
             File.WriteAllBytes(filepath, encData);
         }
 
@@ -289,7 +289,7 @@ namespace PS3SaveDecrypt {
                 if(string.Equals(entry.file_name, "PARAM.SFO", StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                string filepath = Path.Combine(this.root, entry.file_name);
+                var filepath = Path.Combine(this.root, entry.file_name);
                 var key = this.hash_secure_file_id;
                 var hash = PS3Crypto.GetHMACSHA1(filepath, key);
                 entry.file_hashes[0] = hash;
@@ -318,7 +318,7 @@ namespace PS3SaveDecrypt {
                 var hashdata = new List<byte>();
 
                 while(pfdIndex < this.pfd_hash_table.num_reserved) {
-                    PFDEntry ent = this.pfd_entries[(int) pfdIndex];
+                    var ent = this.pfd_entries[(int) pfdIndex];
                     var buffer = ent.BufferForHash;
                     hashdata.AddRange(buffer);
                     pfdIndex = ent.addition_entry;

@@ -1,92 +1,43 @@
-﻿using System;
+﻿using PS3SaveDecrypt;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.RegularExpressions;
-using PS3SaveDecrypt;
 
 public class GT5SaveEditor {
-
-    private enum State {start, path, prop}
-
-    private class Argv {
-        public bool encrypt;
-        public bool decrypt;
-        public bool read;
-        public string root;
-        public List<string> props;
-        public List<string> vals;
-    }
-
-    private static Argv Parse(string[] args) {
-        var state = State.start;
-
-        var argv = new Argv {
-            encrypt = false,
-            decrypt = false,
-            read = false,
-            root = null,
-            props = new List<string>(),
-            vals = new List<string>()
-        };
-
-        foreach(var arg in args) {
-            if(string.Equals(arg, "enc", StringComparison.OrdinalIgnoreCase)) {
-                argv.encrypt = true;
-                state = State.start;
-            }
-            else if(string.Equals(arg, "dec", StringComparison.OrdinalIgnoreCase)) {
-                argv.decrypt = true;
-                state = State.start;
-            }
-            else if(string.Equals(arg, "read", StringComparison.OrdinalIgnoreCase)) {
-                argv.read = true;
-                state = State.start;
-            }
-            else if(string.Equals(arg, "root", StringComparison.OrdinalIgnoreCase)) {
-                state = State.path;
-            }
-            else if(state == State.path && argv.root == null) {
-                argv.root = arg;
-                state = State.start;
-            }
-            else if(Regex.IsMatch(arg, "[a-z]+", RegexOptions.IgnoreCase)) {
-                argv.props.Add(arg);
-                state = State.prop;
-            }
-            else if(state == State.prop) {
-                argv.vals.Add(arg);
-                state = State.start;
-            }
-        }
-
-        return argv;
-    }
-
     public static void Main(string[] args) {
-        var argv = Parse(args);
-        var pfd = new ParamPFD(argv.root, GT5Save.securefileid);
+        if(args.Length < 2)
+            return;
 
-        if(argv.decrypt) {
-            pfd.DecryptAllFiles();
-        }
-        else if(argv.encrypt) {
-            pfd.Rebuild();
-        }
-        else if(argv.read) {
-            pfd.DecryptAllFiles();
-            var path = Path.Combine(argv.root, "GT5.0");
-            var save = new GT5Save(path);
-            save.PrintInfos();
-            pfd.Rebuild();
-        }
-        else {
-            pfd.DecryptAllFiles();
-            var path = Path.Combine(argv.root, "GT5.0");
-            var save = new GT5Save(path);
+        var root = args[0];
 
-            for(int i = 0; i < argv.props.Count; i++)
-                save.UpdateItem(argv.props[i], argv.vals[i]);
+        var pfd = new ParamPFD(root, GT5Save.securefileid);
+        pfd.DecryptAllFiles();
 
-            pfd.Rebuild();
+        var path = Path.Combine(root, "GT5.0");
+        var save = new GT5Save(path);
+
+        for(int i = 1; i < args.Length; i++) {
+            if(string.Equals(args[i], "read", StringComparison.OrdinalIgnoreCase))
+                save.PrintInfos();
+            else if(string.Equals(args[i], "goldlic", StringComparison.OrdinalIgnoreCase))
+                save.Process(GT5Save.Commands.GoldLicenses);
+            else if(string.Equals(args[i], "goldaspec", StringComparison.OrdinalIgnoreCase))
+                save.Process(GT5Save.Commands.GoldAspec);
+            else if(string.Equals(args[i], "goldbspec", StringComparison.OrdinalIgnoreCase))
+                save.Process(GT5Save.Commands.GoldBspec);
+            else if(string.Equals(args[i], "goldspec", StringComparison.OrdinalIgnoreCase))
+                save.Process(GT5Save.Commands.GoldSpecial);
+            else if(string.Equals(args[i], "allgifts", StringComparison.OrdinalIgnoreCase))
+                save.Process(GT5Save.Commands.AllGifts);
+            else if(string.Equals(args[i], "maxmoney", StringComparison.OrdinalIgnoreCase))
+                save.Process(GT5Save.Commands.MaxMoney);
+            else if(Regex.IsMatch(args[i], "^[^\\s=]+=[^\\s=]+$", RegexOptions.IgnoreCase)) {
+                var parts = args[i].Split("=");
+                save.UpdateItem(parts[0], parts[1]);
+            }
         }
+
+        pfd.Rebuild();
     }
 }
