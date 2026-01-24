@@ -22,7 +22,7 @@ public class GT5Save {
     private ulong _dbOffset;
     private string _dbPath;
     public const string securefileid = "BDBD2EB72D82473DBE09F1B552A93FE6";
-    public enum Commands {GoldLicenses, GoldAspec, GoldBspec, GoldSpecial, AllGifts, MaxMoney}
+    public enum Command {GoldLicenses, GoldAspec, GoldBspec, GoldSpecial, AllGifts, MaxMoney}
 
     public GT5Save(string path) {
         _path = path;
@@ -502,31 +502,31 @@ public class GT5Save {
         }
     }
 
-    public void Process(Commands cmd) {
+    public void Process(Command cmd) {
         var updateDb = true;
 
         switch(cmd) {
-            case Commands.GoldLicenses:
+            case Command.GoldLicenses:
                 UpdateDb("UPDATE t_license SET result = 0");
                 break;
 
-            case Commands.GoldAspec:
+            case Command.GoldAspec:
                 UpdateDb("UPDATE t_aspec_race SET result = 0");
                 break;
 
-            case Commands.GoldBspec:
+            case Command.GoldBspec:
                 UpdateDb("UPDATE t_bspec_race SET result = 0");
                 break;
 
-            case Commands.GoldSpecial:
+            case Command.GoldSpecial:
                 UpdateDb("UPDATE t_special_event SET result = 0");
                 break;
 
-            case Commands.AllGifts:
+            case Command.AllGifts:
                 UpdateDb("UPDATE t_event_present SET get_flag = 0");
                 break;
 
-            case Commands.MaxMoney:
+            case Command.MaxMoney:
                 UpdateItem("cash", "20000000");
                 updateDb = false;
                 break;

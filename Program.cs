@@ -21,17 +21,17 @@ public class GT5SaveEditor {
             if(string.Equals(args[i], "read", StringComparison.OrdinalIgnoreCase))
                 save.PrintInfos();
             else if(string.Equals(args[i], "goldlic", StringComparison.OrdinalIgnoreCase))
-                save.Process(GT5Save.Commands.GoldLicenses);
+                save.Process(GT5Save.Command.GoldLicenses);
             else if(string.Equals(args[i], "goldaspec", StringComparison.OrdinalIgnoreCase))
-                save.Process(GT5Save.Commands.GoldAspec);
+                save.Process(GT5Save.Command.GoldAspec);
             else if(string.Equals(args[i], "goldbspec", StringComparison.OrdinalIgnoreCase))
-                save.Process(GT5Save.Commands.GoldBspec);
+                save.Process(GT5Save.Command.GoldBspec);
             else if(string.Equals(args[i], "goldspec", StringComparison.OrdinalIgnoreCase))
-                save.Process(GT5Save.Commands.GoldSpecial);
+                save.Process(GT5Save.Command.GoldSpecial);
             else if(string.Equals(args[i], "allgifts", StringComparison.OrdinalIgnoreCase))
-                save.Process(GT5Save.Commands.AllGifts);
+                save.Process(GT5Save.Command.AllGifts);
             else if(string.Equals(args[i], "maxmoney", StringComparison.OrdinalIgnoreCase))
-                save.Process(GT5Save.Commands.MaxMoney);
+                save.Process(GT5Save.Command.MaxMoney);
             else if(Regex.IsMatch(args[i], "^[^\\s=]+=[^\\s=]+$", RegexOptions.IgnoreCase)) {
                 var parts = args[i].Split("=");
                 save.UpdateItem(parts[0], parts[1]);
